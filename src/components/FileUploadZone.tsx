@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Film, Image, X, CheckCircle2, Loader2, ZoomIn, ToggleLeft, ToggleRight } from "lucide-react";
 
@@ -19,6 +19,12 @@ interface FileUploadZoneProps {
 const FileUploadZone = ({ onFilesUploaded }: FileUploadZoneProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+
+  useEffect(() => {
+    if (onFilesUploaded) {
+      onFilesUploaded(uploadedFiles);
+    }
+  }, [uploadedFiles, onFilesUploaded]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -73,28 +79,24 @@ const FileUploadZone = ({ onFilesUploaded }: FileUploadZoneProps) => {
     }, 1500);
   };
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
 
-      const files = Array.from(e.dataTransfer.files);
-      const validFiles = files.filter((f) => f.type.startsWith("video/") || f.type.startsWith("image/"));
+    const files = Array.from(e.dataTransfer.files);
+    const validFiles = files.filter((f) => f.type.startsWith("video/") || f.type.startsWith("image/"));
 
-      const newUploadedFiles = validFiles.map(processFile);
+    const newUploadedFiles = validFiles.map(processFile);
 
-      setUploadedFiles((prev) => {
-        const updated = [...prev, ...newUploadedFiles];
-        if (onFilesUploaded) onFilesUploaded(updated);
-        return updated;
-      });
+    setUploadedFiles((prev) => {
+      const updated = [...prev, ...newUploadedFiles];
+      return updated;
+    });
 
-      newUploadedFiles.forEach((file) => {
-        simulateUpload(file.id);
-      });
-    },
-    [onFilesUploaded],
-  );
+    newUploadedFiles.forEach((file) => {
+      simulateUpload(file.id);
+    });
+  }, []);
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -102,7 +104,6 @@ const FileUploadZone = ({ onFilesUploaded }: FileUploadZoneProps) => {
 
     setUploadedFiles((prev) => {
       const updated = [...prev, ...newUploadedFiles];
-      if (onFilesUploaded) onFilesUploaded(updated);
       return updated;
     });
 
@@ -114,7 +115,6 @@ const FileUploadZone = ({ onFilesUploaded }: FileUploadZoneProps) => {
   const removeFile = (id: string) => {
     setUploadedFiles((prev) => {
       const updated = prev.filter((f) => f.id !== id);
-      if (onFilesUploaded) onFilesUploaded(updated);
       return updated;
     });
   };
