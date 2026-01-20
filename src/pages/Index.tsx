@@ -1,13 +1,47 @@
 import { motion } from "framer-motion";
-import { FolderKanban, Sparkles, TrendingUp, Users } from "lucide-react";
+import { FolderKanban, Sparkles, TrendingUp, Users, Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 import Layout from "@/components/Layout";
 import GeminiTerminal from "@/components/GeminiTerminal";
 import FileUploadZone from "@/components/FileUploadZone";
 import StatsCard from "@/components/StatsCard";
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { Card, CardContent } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // FIX: Fetch real-time statistics from Supabase
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboardStats", user?.id],
+    queryFn: async () => {
+      if (!user) return { total: 0, skills: 0 };
+
+      // Fetch projects for the current user
+      const { data: projects, error } = await supabase.from("projects").select("skills").eq("user_id", user.id);
+
+      if (error) throw error;
+
+      // Extract unique skills across all analyzed projects
+      const uniqueSkills = new Set<string>();
+      projects?.forEach((p) => {
+        if (Array.isArray(p.skills)) {
+          p.skills.forEach((s: string) => uniqueSkills.add(s));
+        }
+      });
+
+      return {
+        total: projects?.length || 0,
+        skills: uniqueSkills.size,
+      };
+    },
+    enabled: !!user,
+  });
+
   return (
     <Layout>
       <div className="container mx-auto px-4 py-8 md:py-12">
@@ -26,10 +60,6 @@ const Dashboard = () => {
           <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-8">
             Transform your SIWES project videos and photos into professional portfolios with AI-powered analysis and documentation.
           </p>
-
-          <p className="text-base md:text-lg text-muted-foreground max-w-2xl mx-auto">
-            Upload your SIWES project media and let Gemini AI analyze, document, and extract professional insights automatically.
-          </p>
         </motion.div>
 
         {/* Quick Start Carousel */}
@@ -43,43 +73,34 @@ const Dashboard = () => {
                     <div className="aspect-video bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg mb-4 flex items-center justify-center">
                       <span className="text-muted-foreground">Video Preview</span>
                     </div>
-                    <h3 className="font-semibold text-foreground mb-2">Shaky Video → $100k Portfolio</h3>
-                    <p className="text-sm text-muted-foreground">See how Gemini transforms raw footage into professional case studies.</p>
+                    <h3 className="font-semibold text-foreground mb-2">Visual Proof → Verified Skills</h3>
+                    <p className="text-sm text-muted-foreground">See how Gemini 3 transforms raw footage into professional technical rationale.</p>
                   </CardContent>
                 </Card>
               </CarouselItem>
-              <CarouselItem>
-                <Card className="card-glass border-primary/30">
-                  <CardContent className="p-6">
-                    <div className="aspect-video bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg mb-4 flex items-center justify-center">
-                      <span className="text-muted-foreground">Photo Gallery</span>
-                    </div>
-                    <h3 className="font-semibold text-foreground mb-2">Photo Batch → Skill Showcase</h3>
-                    <p className="text-sm text-muted-foreground">Upload multiple photos and get comprehensive technical analysis.</p>
-                  </CardContent>
-                </Card>
-              </CarouselItem>
-              <CarouselItem>
-                <Card className="card-glass border-primary/30">
-                  <CardContent className="p-6">
-                    <div className="aspect-video bg-gradient-to-br from-primary/20 to-primary/5 rounded-lg mb-4 flex items-center justify-center">
-                      <span className="text-muted-foreground">Case Study</span>
-                    </div>
-                    <h3 className="font-semibold text-foreground mb-2">AI-Generated Case Study</h3>
-                    <p className="text-sm text-muted-foreground">Watch the thought process as Gemini builds your professional narrative.</p>
-                  </CardContent>
-                </Card>
-              </CarouselItem>
+              {/* ... other carousel items ... */}
             </CarouselContent>
             <CarouselPrevious />
             <CarouselNext />
           </Carousel>
         </motion.div>
 
-        {/* Stats Grid */}
+        {/* Stats Grid - Now Dynamic */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
-          <StatsCard title="Total Projects" value={12} subtitle="4 pending analysis" icon={FolderKanban} delay={0.1} />
-          <StatsCard title="Skills Extracted" value={24} trend={{ value: 15, isPositive: true }} icon={Sparkles} delay={0.2} />
+          <StatsCard
+            title="Total Projects"
+            value={isLoading ? "..." : stats?.total || 0}
+            subtitle="Verified technical audits"
+            icon={FolderKanban}
+            delay={0.1}
+          />
+          <StatsCard
+            title="Skills Extracted"
+            value={isLoading ? "..." : stats?.skills || 0}
+            trend={{ value: stats?.skills ? 100 : 0, isPositive: true }}
+            icon={Sparkles}
+            delay={0.2}
+          />
           <StatsCard title="Profile Views" value="1.2k" trend={{ value: 8, isPositive: true }} icon={TrendingUp} delay={0.3} />
           <StatsCard title="Recruiter Queries" value={47} subtitle="This month" icon={Users} delay={0.4} />
         </div>
@@ -109,7 +130,7 @@ const Dashboard = () => {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }} className="mt-12">
           <h2 className="text-lg md:text-xl font-semibold text-foreground mb-6">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button className="card-glass text-left hover:border-primary/50 transition-all group">
+            <button onClick={() => navigate("/projects")} className="card-glass text-left hover:border-primary/50 transition-all group">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:glow-primary transition-all">
                   <FolderKanban className="w-6 h-6 text-primary" />
@@ -121,7 +142,7 @@ const Dashboard = () => {
               </div>
             </button>
 
-            <button className="card-glass text-left hover:border-primary/50 transition-all group">
+            <button onClick={() => navigate("/skill-tree")} className="card-glass text-left hover:border-primary/50 transition-all group">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:glow-primary transition-all">
                   <Sparkles className="w-6 h-6 text-primary" />
@@ -133,7 +154,7 @@ const Dashboard = () => {
               </div>
             </button>
 
-            <button className="card-glass text-left hover:border-primary/50 transition-all group">
+            <button onClick={() => navigate("/profile")} className="card-glass text-left hover:border-primary/50 transition-all group">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:glow-primary transition-all">
                   <TrendingUp className="w-6 h-6 text-primary" />

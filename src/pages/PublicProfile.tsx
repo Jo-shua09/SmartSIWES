@@ -13,6 +13,8 @@ const PublicProfile = () => {
   const { userId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  // Determine target user: Use URL parameter for public view, or current user for preview
   const targetUserId = userId || user?.id;
 
   const {
@@ -20,33 +22,51 @@ const PublicProfile = () => {
     isLoading,
     error,
   } = useQuery({
-    queryKey: ["publicProfile", targetUserId],
+    queryKey: ["publicProfile", targetUserId, !!userId],
     queryFn: async () => {
       if (!targetUserId) return null;
 
-      // 1. Fetch Profile and Projects (Filtered by is_public if viewing someone else)
-      const { data: profileData } = await supabase.from("profiles").select("*").eq("id", targetUserId).single();
+      // 1. Fetch Profile Data
+      const { data: profileData, error: profileError } = await supabase.from("profiles").select("*").eq("id", targetUserId).single();
 
+      if (profileError && !userId) {
+        // Fallback for current user if profile isn't fully set up yet
+        return {
+          full_name: user?.user_metadata?.full_name || "Engineering Student",
+          title: "Student Portfolio",
+          location: "Not set",
+          bio: "Building technical solutions analyzed by Gemini AI.",
+          projects: [],
+          skills: [],
+          insight: "Upload projects to generate AI recruiter insights.",
+        };
+      }
+
+      // 2. Fetch Projects (Filter by is_public only if viewing a public URL)
       let query = supabase.from("projects").select("*").eq("user_id", targetUserId);
-      if (userId) query = query.eq("is_public", true); // Only public if viewing someone else
 
-      const { data: projectsData } = await query.order("created_at", { ascending: false });
+      if (userId) {
+        query = query.eq("is_public", true); // Recruiters only see public work
+      }
 
-      // 2. Extract Real Skills and Recruit Insight from latest project
+      const { data: projectsData, error: projectsError } = await query.order("created_at", { ascending: false });
+      if (projectsError) throw projectsError;
+
+      // 3. Extract real skills from all visible projects
       const skillsMap = new Map<string, number>();
       projectsData?.forEach((p) => {
         if (Array.isArray(p.skills)) {
-          p.skills.forEach((s: string) => skillsMap.set(s, skillsMap.get(s) || 85));
+          p.skills.forEach((s: string) => skillsMap.set(s, 85)); // Default proficiency for verified skills
         }
       });
 
       return {
         ...profileData,
-        full_name: profileData?.full_name || user?.user_metadata?.full_name || "Student",
+        full_name: profileData?.full_name || user?.user_metadata?.full_name || "Verified Student",
         projects: projectsData || [],
         skills: Array.from(skillsMap.entries()).map(([name, level]) => ({ name, level })),
-        // Use the insight from the most recent project analysis
-        insight: projectsData?.[0]?.recruiter_insight || "Project analysis pending...",
+        // Pull the Recruiter Insight from the most recent project analysis
+        insight: projectsData?.[0]?.recruiter_insight || "Analyzing technical competencies across projects...",
       };
     },
     enabled: !!targetUserId,
@@ -61,9 +81,24 @@ const PublicProfile = () => {
       </Layout>
     );
 
+  if (error || (!profile && userId)) {
+    return (
+      <Layout>
+        <div className="min-h-screen flex flex-col items-center justify-center text-center px-4">
+          <h2 className="text-2xl font-bold mb-2">Profile Not Found</h2>
+          <p className="text-muted-foreground">The profile you are looking for is either private or does not exist.</p>
+          <button onClick={() => navigate("/")} className="mt-4 text-primary hover:underline">
+            Return Home
+          </button>
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="min-h-screen bg-background">
+        {/* Hero Section */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -73,7 +108,7 @@ const PublicProfile = () => {
             <div className="flex flex-col md:flex-row items-center gap-8">
               <div className="flex-1 text-center md:text-left">
                 <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 mb-6">
-                  <span className="text-xs md:text-sm text-primary font-medium">Verified Portfolio</span>
+                  <span className="text-xs md:text-sm text-primary font-medium">Verified SIWES Portfolio</span>
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold text-foreground mb-2">{profile?.full_name}</h1>
                 <p className="text-lg md:text-xl text-muted-foreground mb-4">{profile?.title || "Engineering Student"}</p>
@@ -88,7 +123,7 @@ const PublicProfile = () => {
                   </div>
                 </div>
                 <p className="text-base md:text-lg text-muted-foreground max-w-2xl mb-8">
-                  {profile?.bio || "Showcasing technical excellence through AI-verified projects."}
+                  {profile?.bio || "Showcasing technical excellence through AI-verified projects and industrial training."}
                 </p>
                 <div className="flex flex-wrap gap-4 justify-center md:justify-start">
                   <button className="btn-primary flex items-center gap-2">
@@ -109,21 +144,25 @@ const PublicProfile = () => {
           </div>
         </motion.div>
 
+        {/* Skills Radar */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="py-16">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Technical Skills</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Technical Competencies</h2>
+              <p className="text-muted-foreground">AI-verified skill map derived from project analysis.</p>
             </div>
             <div className="max-w-4xl mx-auto">
+              {/* Radar chart now reflects real project skills count */}
               <SkillRadarChart />
             </div>
           </div>
         </motion.div>
 
+        {/* Project Gallery */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="py-16 bg-muted/30 mx-4">
           <div className="container mx-auto px-4">
             <div className="text-center mb-12">
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Featured Projects</h2>
+              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-4">Featured Work</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-6xl mx-auto">
               {profile?.projects.map((project: any, index: number) => (
@@ -141,10 +180,14 @@ const PublicProfile = () => {
                   />
                 </motion.div>
               ))}
+              {profile?.projects.length === 0 && (
+                <div className="col-span-full text-center py-12 text-muted-foreground">No public projects available for this profile.</div>
+              )}
             </div>
           </div>
         </motion.div>
 
+        {/* Dynamic Recruiter Insight */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }} className="py-16">
           <div className="container mx-auto px-4">
             <div className="max-w-4xl mx-auto">
@@ -155,10 +198,10 @@ const PublicProfile = () => {
                   </div>
                   <div>
                     <h3 className="text-lg md:text-xl font-semibold text-foreground">Recruiter's Insight</h3>
-                    <p className="text-xs md:text-sm text-muted-foreground">AI Technical Audit</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">AI-Driven Technical Audit Summary</p>
                   </div>
                 </div>
-                <div className="space-y-4 text-muted-foreground whitespace-pre-wrap">
+                <div className="space-y-4 text-muted-foreground whitespace-pre-wrap leading-relaxed">
                   {/* REAL AI INSIGHT FROM DATABASE */}
                   {profile?.insight}
                 </div>

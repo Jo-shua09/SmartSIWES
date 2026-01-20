@@ -24,19 +24,23 @@ const ProjectDetail = () => {
     enabled: !!id,
   });
 
+  // FIX: Properly defined the handleShareProject handler
   const handleShareProject = async () => {
     try {
-      const { error } = await supabase.from("projects").update({ is_public: !project?.is_public }).eq("id", id);
+      if (!project) return;
+
+      const { error } = await supabase.from("projects").update({ is_public: !project.is_public }).eq("id", id);
 
       if (error) throw error;
 
       toast({
-        title: project?.is_public ? "Project set to Private" : "Project is now Public",
-        description: project?.is_public
+        title: project.is_public ? "Project set to Private" : "Project is now Public",
+        description: project.is_public
           ? "It will no longer appear on your public profile."
           : "Anyone with your profile link can now view this project.",
       });
 
+      // Invalidate the query to refresh the UI state
       queryClient.invalidateQueries({ queryKey: ["project", id] });
     } catch (error) {
       toast({
@@ -95,6 +99,7 @@ const ProjectDetail = () => {
           <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-foreground mb-4">{project.title}</h1>
           <p className="text-base md:text-lg text-muted-foreground max-w-3xl">{project.description || "No description available."}</p>
           <div className="flex flex-wrap gap-3 mt-6">
+            {/* The onClick now points correctly to handleShareProject */}
             <button onClick={handleShareProject} className="btn-primary flex items-center gap-2">
               {project.is_public ? <Globe className="w-4 h-4" /> : <Share2 className="w-4 h-4" />}
               {project.is_public ? "Public Link" : "Share Project"}

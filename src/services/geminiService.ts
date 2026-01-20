@@ -21,6 +21,7 @@ export interface ProjectAnalysis {
   technical_specs: Record<string, string | number>;
   category: string;
   recruiter_insight: string;
+  methodology: string[]; // FIX: Added methodology to the interface
 }
 
 /**
@@ -72,7 +73,8 @@ export const generateProjectProof = async (
           parts: [
             { inlineData: { data: base64Data, mimeType: file.type } },
             {
-              text: "Act as a Senior Technical Auditor. Analyze this SIWES project. Output a JSON object with: title, summary (300 words), description, skills[], technical_specs{}, category, and recruiter_insight. Perform a deep reasoning audit of all visible components.",
+              // FIX: Prompt updated to explicitly ask for methodology
+              text: "Act as a Senior Technical Auditor. Analyze this SIWES project. Output a JSON object with: title, summary (300 words), description, skills[], technical_specs{}, category, recruiter_insight, and methodology[]. Perform a deep reasoning audit of all visible components.",
             },
           ],
         },
@@ -80,7 +82,7 @@ export const generateProjectProof = async (
       config: {
         thinkingConfig: {
           includeThoughts: true,
-          thinkingLevel: ThinkingLevel.HIGH, // Use the Enum reference directly
+          thinkingLevel: ThinkingLevel.HIGH,
         },
       },
     });
@@ -88,12 +90,10 @@ export const generateProjectProof = async (
     let fullResponseText = "";
 
     // 3. Real-time Thought Streaming
-    // This loops through chunks and pushes "part.thought" to your UI terminal
     for await (const chunk of result.stream) {
       const parts = chunk.candidates?.[0]?.content?.parts || [];
       for (const part of parts) {
         if ("thought" in part && part.thought) {
-          // Send ACTUAL AI internal thoughts to the terminal component
           onThought({ text: part.text, type: "process" });
         } else if (part.text) {
           fullResponseText += part.text;
@@ -120,6 +120,9 @@ export const generateProjectProof = async (
         is_video: file.type.startsWith("video/"),
         skills: analysis.skills,
         technical_specs: analysis.technical_specs,
+        // FIX: Included missing fields in DB insert
+        recruiter_insight: analysis.recruiter_insight,
+        methodology: analysis.methodology,
       })
       .select()
       .single();
